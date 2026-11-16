@@ -6,7 +6,6 @@ import {
 } from '../utils/gerarPdf'
 
 const ABAS = [
-  { id: 'visao-geral', label: 'Visão Geral' },
   { id: 'alunos', label: 'Alunos' },
   { id: 'frequencia', label: 'Lançar Frequência' },
   { id: 'notas', label: 'Lançar Notas' },
@@ -14,7 +13,7 @@ const ABAS = [
 ]
 
 export default function Dashboard() {
-  const [abaAtiva, setAbaAtiva] = useState('visao-geral')
+  const [abaAtiva, setAbaAtiva] = useState('alunos')
 
   async function handleSair() {
     await supabase.auth.signOut()
@@ -25,13 +24,16 @@ export default function Dashboard() {
       {/* Cabeçalho */}
       <header className="bg-white border-b border-gray-200 print:hidden">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-gray-800">Gestão Escolar</h1>
-          <button
-            onClick={handleSair}
-            className="text-sm text-gray-500 hover:text-gray-800 transition"
-          >
-            Sair
-          </button>
+          <h1 className="text-lg font-semibold text-gray-800">JOVENS TALENTOS</h1>
+          <div className="flex items-center gap-4">
+            <BotaoBackup />
+            <button
+              onClick={handleSair}
+              className="text-sm text-gray-500 hover:text-gray-800 transition"
+            >
+              Sair
+            </button>
+          </div>
         </div>
       </header>
 
@@ -56,7 +58,6 @@ export default function Dashboard() {
 
       {/* Conteúdo */}
       <main className="max-w-5xl mx-auto px-4 py-6">
-        {abaAtiva === 'visao-geral' && <VisaoGeral />}
         {abaAtiva === 'alunos' && <Alunos />}
         {abaAtiva === 'frequencia' && <Frequencia />}
         {abaAtiva === 'notas' && <Notas />}
@@ -66,51 +67,47 @@ export default function Dashboard() {
   )
 }
 
-function VisaoGeral() {
-  const [totalAlunos, setTotalAlunos] = useState(0)
-  const [mediaGeral, setMediaGeral] = useState(null)
-  const [percPresenca, setPercPresenca] = useState(null)
-  const [carregando, setCarregando] = useState(true)
+function BotaoBackup() {
+  const [exportando, setExportando] = useState(false)
 
-  useEffect(() => {
-    carregarNumeros()
-  }, [])
+  async function handleExportar() {
+    setExportando(true)
 
-  async function carregarNumeros() {
-    setCarregando(true)
-    const { count: totalAlunosCount } = await supabase
-      .from('alunos')
-      .select('*', { count: 'exact', head: true })
-    const { data: notas } = await supabase.from('notas').select('nota')
-    const { data: frequencias } = await supabase.from('frequencias').select('status')
+    const { data: alunos } = await supabase.from('alunos').select('*')
+    const { data: notas } = await supabase.from('notas').select('*')
+    const { data: frequencias } = await supabase.from('frequencias').select('*')
 
-    setTotalAlunos(totalAlunosCount || 0)
-
-    if (notas && notas.length > 0) {
-      const soma = notas.reduce((acc, n) => acc + Number(n.nota), 0)
-      setMediaGeral((soma / notas.length).toFixed(1))
-    } else {
-      setMediaGeral(null)
+    const backup = {
+      exportado_em: new Date().toISOString(),
+      alunos: alunos || [],
+      notas: notas || [],
+      frequencias: frequencias || [],
     }
 
-    if (frequencias && frequencias.length > 0) {
-      const presentes = frequencias.filter((f) => f.status === 'presente').length
-      setPercPresenca(((presentes / frequencias.length) * 100).toFixed(0))
-    } else {
-      setPercPresenca(null)
-    }
+    const conteudo = JSON.stringify(backup, null, 2)
+    const blob = new Blob([conteudo], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
 
-    setCarregando(false)
+    const link = document.createElement('a')
+    link.href = url
+    const dataHoje = new Date().toISOString().slice(0, 10)
+    link.download = `backup-jovens-talentos-${dataHoje}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    setExportando(false)
   }
 
-  if (carregando) return <p className="text-gray-400 text-sm">Carregando...</p>
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <Cartao titulo="Total de Alunos" valor={totalAlunos} />
-      <Cartao titulo="Média Geral" valor={mediaGeral !== null ? mediaGeral : '—'} />
-      <Cartao titulo="% de Presença" valor={percPresenca !== null ? `${percPresenca}%` : '—'} />
-    </div>
+    <button
+      onClick={handleExportar}
+      disabled={exportando}
+      className="text-sm text-gray-500 hover:text-gray-800 transition disabled:opacity-50"
+    >
+      {exportando ? 'Exportando...' : 'Exportar Backup'}
+    </button>
   )
 }
 
