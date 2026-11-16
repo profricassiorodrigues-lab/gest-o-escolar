@@ -70,32 +70,85 @@ export default function Dashboard() {
 function BotaoBackup() {
   const [exportando, setExportando] = useState(false)
 
-  async function handleExportar() {
-    setExportando(true)
+  function converterParaCSV(linhas, colunas) {
+    const cabecalho = colunas.join(',')
 
-    const { data: alunos } = await supabase.from('alunos').select('*')
-    const { data: notas } = await supabase.from('notas').select('*')
-    const { data: frequencias } = await supabase.from('frequencias').select('*')
+    const linhasFormatadas = linhas.map((linha) =>
+      colunas
+        .map((coluna) => {
+          const valor = linha[coluna] ?? ''
+          const texto = String(valor).replace(/"/g, '""')
+          return `"${texto}"`
+        })
+        .join(',')
+    )
 
-    const backup = {
-      exportado_em: new Date().toISOString(),
-      alunos: alunos || [],
-      notas: notas || [],
-      frequencias: frequencias || [],
-    }
+    return [cabecalho, ...linhasFormatadas].join('\n')
+  }
 
-    const conteudo = JSON.stringify(backup, null, 2)
-    const blob = new Blob([conteudo], { type: 'application/json' })
+  function baixarArquivo(conteudo, nomeArquivo) {
+    const blob = new Blob(['\uFEFF' + conteudo], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
-
     const link = document.createElement('a')
     link.href = url
-    const dataHoje = new Date().toISOString().slice(0, 10)
-    link.download = `backup-jovens-talentos-${dataHoje}.json`
+    link.download = nomeArquivo
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  }
+
+  async function handleExportar() {
+    setExportando(true)
+
+    const { data: alunos } = await supabase.from('alunos').select('*')
+    const { data: notas } = await supabase
+      .from('notas')
+      .select('aluno_id, avaliacao, nota, data')
+    const { data: frequencias } = await supabase
+      .from('frequencias')
+      .select('aluno_id, data, status')
+
+    const mapaAlunos = {}
+    ;(alunos || []).forEach((a) => {
+      mapaAlunos[a.id] = { nome: a.nome, turma: a.turma }
+    })
+
+    const linhasNotas = (notas || []).map((n) => {
+      const aluno = mapaAlunos[n.aluno_id] || { nome: 'Desconhecido', turma: '—' }
+      return {
+        Nome: aluno.nome,
+        Turma: aluno.turma,
+        Tipo: 'Nota',
+        Data: n.data,
+        Detalhe: n.avaliacao,
+        Valor: n.nota,
+      }
+    })
+
+    const linhasFrequencias = (frequencias || []).map((f) => {
+      const aluno = mapaAlunos[f.aluno_id] || { nome: 'Desconhecido', turma: '—' }
+      return {
+        Nome: aluno.nome,
+        Turma: aluno.turma,
+        Tipo: 'Presença',
+        Data: f.data,
+        Detalhe: '',
+        Valor: f.status === 'presente' ? 'Presente' : 'Falta',
+      }
+    })
+
+    const todasAsLinhas = [...linhasNotas, ...linhasFrequencias].sort((a, b) => {
+      if (a.Nome < b.Nome) return -1
+      if (a.Nome > b.Nome) return 1
+      return a.Data.localeCompare(b.Data)
+    })
+
+    const colunas = ['Nome', 'Turma', 'Tipo', 'Data', 'Detalhe', 'Valor']
+    const csv = converterParaCSV(todasAsLinhas, colunas)
+
+    const dataHoje = new Date().toISOString().slice(0, 10)
+    baixarArquivo(csv, `jovens-talentos-backup-${dataHoje}.csv`)
 
     setExportando(false)
   }
@@ -106,7 +159,7 @@ function BotaoBackup() {
       disabled={exportando}
       className="text-sm text-gray-500 hover:text-gray-800 transition disabled:opacity-50"
     >
-      {exportando ? 'Exportando...' : 'Exportar Backup'}
+      {exportando ? 'Exportando...' : 'Exportar Backup (CSV)'}
     </button>
   )
 }
