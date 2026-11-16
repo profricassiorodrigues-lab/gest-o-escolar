@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import {
+  gerarPDFRelatorioGeral,
+  gerarPDFBoletimIndividual,
+} from '../utils/gerarPdf'
 
 const ABAS = [
   { id: 'visao-geral', label: 'Visão Geral' },
@@ -710,27 +714,44 @@ function RelatorioGeral({ alunos, calcularMedia, calcularPresenca, turmaFiltro }
   const presencaMedia =
     presencas.length > 0 ? presencas.reduce((a, b) => a + b, 0) / presencas.length : null
 
+  function handleBaixarRelatorioGeral() {
+    const linhas = alunos.map((a) => {
+      const media = calcularMedia(a.id)
+      const presenca = calcularPresenca(a.id)
+      return [
+        a.nome,
+        a.turma,
+        media !== null ? media.toFixed(1) : '—',
+        presenca !== null ? `${presenca.toFixed(0)}%` : '—',
+      ]
+    })
+
+    const nomeTurmaArquivo = turmaFiltro
+      ? turmaFiltro.toLowerCase().replace(/\s+/g, '-')
+      : 'todas-turmas'
+
+    gerarPDFRelatorioGeral({
+      titulo: 'Relatório Geral de Desempenho',
+      subtitulo: turmaFiltro ? `Turma: ${turmaFiltro}` : 'Todas as turmas',
+      mediaGeral,
+      presencaMedia,
+      linhas,
+      nomeArquivo: `relatorio-geral-${nomeTurmaArquivo}.pdf`,
+    })
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between print:hidden">
+      <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-gray-800">
           Relatório Geral {turmaFiltro ? `— ${turmaFiltro}` : ''}
         </h2>
         <button
-          onClick={() => window.print()}
-          className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-900 transition"
+          onClick={handleBaixarRelatorioGeral}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
         >
-          Imprimir Relatório Geral
+          Baixar Relatório (PDF)
         </button>
-      </div>
-
-      <div className="hidden print:block mb-4">
-        <h2 className="text-lg font-semibold text-gray-800">
-          Relatório Geral {turmaFiltro ? `— Turma ${turmaFiltro}` : '— Todas as turmas'}
-        </h2>
-        <p className="text-sm text-gray-500">
-          Gerado em {new Date().toLocaleDateString('pt-BR')}
-        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -786,15 +807,25 @@ function RelatorioGeral({ alunos, calcularMedia, calcularPresenca, turmaFiltro }
 }
 
 function BoletimIndividual({ aluno, notas, frequencias, media, presenca }) {
+  function handleBaixarBoletim() {
+    gerarPDFBoletimIndividual({
+      aluno,
+      media,
+      presenca,
+      notas,
+      frequencias,
+    })
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between print:hidden">
+      <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-gray-800">Boletim Individual</h2>
         <button
-          onClick={() => window.print()}
-          className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-900 transition"
+          onClick={handleBaixarBoletim}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
         >
-          Imprimir Boletim / PDF
+          Baixar Boletim (PDF)
         </button>
       </div>
 
@@ -802,9 +833,6 @@ function BoletimIndividual({ aluno, notas, frequencias, media, presenca }) {
         <div className="mb-4">
           <p className="text-lg font-semibold text-gray-800">{aluno.nome}</p>
           <p className="text-sm text-gray-500">Turma: {aluno.turma}</p>
-          <p className="text-xs text-gray-400 hidden print:block">
-            Boletim gerado em {new Date().toLocaleDateString('pt-BR')}
-          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-5">
